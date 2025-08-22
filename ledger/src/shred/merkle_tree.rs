@@ -6,7 +6,7 @@ use {
 pub(crate) const SIZE_OF_MERKLE_ROOT: usize = std::mem::size_of::<Hash>();
 const_assert_eq!(SIZE_OF_MERKLE_ROOT, 32);
 const_assert_eq!(SIZE_OF_MERKLE_PROOF_ENTRY, 20);
-pub(crate) const SIZE_OF_MERKLE_PROOF_ENTRY: usize = std::mem::size_of::<MerkleProofEntry>();
+pub const SIZE_OF_MERKLE_PROOF_ENTRY: usize = std::mem::size_of::<MerkleProofEntry>();
 // Number of proof entries for the standard 64 shred batch.
 pub(crate) const PROOF_ENTRIES_FOR_32_32_BATCH: u8 = 6;
 
@@ -17,7 +17,7 @@ pub(crate) const PROOF_ENTRIES_FOR_32_32_BATCH: u8 = 6;
 pub(crate) const MERKLE_HASH_PREFIX_LEAF: &[u8] = b"\x00SOLANA_MERKLE_SHREDS_LEAF";
 pub(crate) const MERKLE_HASH_PREFIX_NODE: &[u8] = b"\x01SOLANA_MERKLE_SHREDS_NODE";
 
-pub(crate) type MerkleProofEntry = [u8; 20];
+pub type MerkleProofEntry = [u8; 20];
 
 pub fn make_merkle_tree<I>(shreds: I) -> Result<Vec<Hash>, Error>
 where

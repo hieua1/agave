@@ -75,17 +75,17 @@ pub fn get_common_header_bytes(shred: &[u8]) -> Option<&[u8]> {
 }
 
 #[inline]
-pub(crate) fn get_signature(shred: &[u8]) -> Option<Signature> {
+pub fn get_signature(shred: &[u8]) -> Option<Signature> {
     let bytes = <[u8; 64]>::try_from(shred.get(..64)?).unwrap();
     Some(Signature::from(bytes))
 }
 
-pub(crate) const fn get_signature_range() -> Range<usize> {
+pub const fn get_signature_range() -> Range<usize> {
     0..SIGNATURE_BYTES
 }
 
 #[inline]
-pub(super) fn get_shred_variant(shred: &[u8]) -> Result<ShredVariant, Error> {
+pub fn get_shred_variant(shred: &[u8]) -> Result<ShredVariant, Error> {
     let Some(&shred_variant) = shred.get(64) else {
         return Err(Error::InvalidPayloadSize(shred.len()));
     };
@@ -93,7 +93,7 @@ pub(super) fn get_shred_variant(shred: &[u8]) -> Result<ShredVariant, Error> {
 }
 
 #[inline]
-pub(super) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
+pub fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
     get_shred_variant(shred).map(ShredType::from)
 }
 
@@ -110,14 +110,14 @@ pub fn get_index(shred: &[u8]) -> Option<u32> {
 }
 
 #[inline]
-pub(super) fn get_version(shred: &[u8]) -> Option<u16> {
+pub fn get_version(shred: &[u8]) -> Option<u16> {
     let bytes = <[u8; 2]>::try_from(shred.get(77..77 + 2)?).unwrap();
     Some(u16::from_le_bytes(bytes))
 }
 
 // The caller should verify first that the shred is data and not code!
 #[inline]
-pub(super) fn get_parent_offset(shred: &[u8]) -> Option<u16> {
+pub fn get_parent_offset(shred: &[u8]) -> Option<u16> {
     debug_assert_eq!(get_shred_type(shred).unwrap(), ShredType::Data);
     let bytes = <[u8; 2]>::try_from(shred.get(83..83 + 2)?).unwrap();
     Some(u16::from_le_bytes(bytes))
@@ -151,7 +151,7 @@ fn get_data_size(shred: &[u8]) -> Result<u16, Error> {
 }
 
 #[inline]
-pub(crate) fn get_data(shred: &[u8]) -> Result<&[u8], Error> {
+pub fn get_data(shred: &[u8]) -> Result<&[u8], Error> {
     match get_shred_variant(shred)? {
         ShredVariant::LegacyCode => Err(Error::InvalidShredType),
         ShredVariant::MerkleCode { .. } => Err(Error::InvalidShredType),
@@ -181,7 +181,7 @@ pub fn get_shred_id(shred: &[u8]) -> Option<ShredId> {
     ))
 }
 
-pub(crate) fn get_signed_data(shred: &[u8]) -> Option<SignedData> {
+pub fn get_signed_data(shred: &[u8]) -> Option<SignedData> {
     let data = match get_shred_variant(shred).ok()? {
         ShredVariant::LegacyCode | ShredVariant::LegacyData => {
             let chunk = shred.get(shred::legacy::SIGNED_MESSAGE_OFFSETS)?;
@@ -210,7 +210,7 @@ pub(crate) fn get_signed_data(shred: &[u8]) -> Option<SignedData> {
 }
 
 // Returns offsets within the shred payload which is signed.
-pub(crate) fn get_signed_data_offsets(shred: &[u8]) -> Option<Range<usize>> {
+pub fn get_signed_data_offsets(shred: &[u8]) -> Option<Range<usize>> {
     match get_shred_variant(shred).ok()? {
         ShredVariant::LegacyCode | ShredVariant::LegacyData => {
             let offsets = shred::legacy::SIGNED_MESSAGE_OFFSETS;
@@ -250,7 +250,7 @@ pub fn get_merkle_root(shred: &[u8]) -> Option<Hash> {
     }
 }
 
-pub(crate) fn get_chained_merkle_root(shred: &[u8]) -> Option<Hash> {
+pub fn get_chained_merkle_root(shred: &[u8]) -> Option<Hash> {
     let offset = match get_shred_variant(shred).ok()? {
         ShredVariant::LegacyCode | ShredVariant::LegacyData => return None,
         ShredVariant::MerkleCode {
@@ -303,7 +303,7 @@ pub fn get_retransmitter_signature(shred: &[u8]) -> Result<Signature, Error> {
     Ok(Signature::from(<[u8; 64]>::try_from(bytes).unwrap()))
 }
 
-pub(crate) fn is_retransmitter_signed_variant(shred: &[u8]) -> Result<bool, Error> {
+pub fn is_retransmitter_signed_variant(shred: &[u8]) -> Result<bool, Error> {
     match get_shred_variant(shred)? {
         ShredVariant::LegacyCode | ShredVariant::LegacyData => Ok(false),
         ShredVariant::MerkleCode {
@@ -370,7 +370,7 @@ pub fn resign_shred(shred: &mut [u8], keypair: &Keypair) -> Result<(), Error> {
 // Minimally corrupts the packet so that the signature no longer verifies.
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)]
-pub(crate) fn corrupt_packet<R: Rng>(
+pub fn corrupt_packet<R: Rng>(
     rng: &mut R,
     packet: &mut Packet,
     keypairs: &HashMap<Slot, Keypair>,
