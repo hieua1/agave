@@ -146,7 +146,7 @@ impl StreamerReceiveStats {
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
 
-fn recv_loop(
+pub fn recv_loop(
     socket: &UdpSocket,
     exit: &AtomicBool,
     packet_batch_sender: &impl ChannelSend<PacketBatch>,
