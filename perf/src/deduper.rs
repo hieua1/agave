@@ -62,6 +62,16 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
         saturated
     }
 
+    pub fn should_reset<R: Rng>(
+        &self,
+        false_positive_rate: f64,
+        reset_cycle: Duration,
+    ) -> bool {
+        assert!(0.0 < false_positive_rate && false_positive_rate < 1.0);
+        let saturated = self.false_positive_rate() >= false_positive_rate;
+        saturated || self.clock.elapsed() >= reset_cycle
+    }
+
     // Returns true if the data is duplicate.
     #[must_use]
     #[allow(clippy::arithmetic_side_effects)]
