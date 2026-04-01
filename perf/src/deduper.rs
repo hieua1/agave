@@ -42,6 +42,16 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
         ones_ratio.powi(K as i32)
     }
 
+    pub fn should_reset<R: Rng>(
+        &self,
+        false_positive_rate: f64,
+        reset_cycle: Duration,
+    ) -> bool {
+        assert!(0.0 < false_positive_rate && false_positive_rate < 1.0);
+        let saturated = self.false_positive_rate() >= false_positive_rate;
+        saturated || self.clock.elapsed() >= reset_cycle
+    }
+
     /// Resets the Deduper if either it is older than the reset_cycle or it is
     /// saturated enough that false positive rate exceeds specified threshold.
     /// Returns true if the deduper was saturated.

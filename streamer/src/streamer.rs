@@ -154,7 +154,7 @@ impl StreamerReceiveStats {
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
 
-fn recv_loop<P: SocketProvider>(
+pub fn recv_loop<P: SocketProvider>(
     provider: &mut P,
     exit: &AtomicBool,
     packet_batch_sender: &impl ChannelSend<PacketBatch>,
