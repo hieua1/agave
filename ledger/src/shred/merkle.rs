@@ -633,11 +633,8 @@ pub(super) fn recover_custom(
     if !shreds.iter().tuple_windows().all(is_sorted) {
         shreds.sort_unstable_by(cmp_shred_erasure_shard_index);
     }
-    // Grab {common, coding} headers from the last coding shred.
-    // Incoming shreds are resigned immediately after signature verification,
-    // so we can just grab the retransmitter signature from one of the
-    // available shreds and attach it to the recovered shreds.
-    let (common_header, coding_header, merkle_root, chained_merkle_root, retransmitter_signature) = {
+
+    let (common_header, coding_header, chained_merkle_root, retransmitter_signature) = {
         // The last shred must be a coding shred by the above sorting logic.
         let Some(Shred::ShredCode(shred)) = shreds.last() else {
             return Err(Error::from(TooFewParityShards));
@@ -655,60 +652,11 @@ pub(super) fn recover_custom(
         (
             common_header,
             coding_header,
-            shred.merkle_root()?,
             shred.chained_merkle_root().ok(),
             shred.retransmitter_signature().ok(),
         )
     };
-    debug_assert_matches!(common_header.shred_variant, ShredVariant::MerkleCode { .. });
-    let (proof_size, resigned) = match common_header.shred_variant {
-        ShredVariant::MerkleCode {
-            proof_size,
-            resigned,
-        } => (proof_size, resigned),
-        ShredVariant::MerkleData { .. } => {
-            return Err(Error::InvalidShredVariant);
-        }
-    };
-    debug_assert!(!resigned || retransmitter_signature.is_some());
-    // Verify that shreds belong to the same erasure batch
-    // and have consistent headers.
-    debug_assert!(shreds.iter().all(|shred| {
-        let ShredCommonHeader {
-            signature: _, // signature are verified further below.
-            shred_variant,
-            slot,
-            index: _,
-            version,
-            fec_set_index,
-        } = shred.common_header();
-        slot == &common_header.slot
-            && version == &common_header.version
-            && fec_set_index == &common_header.fec_set_index
-            && match shred {
-            Shred::ShredData(_) => {
-                shred_variant
-                    == &ShredVariant::MerkleData {
-                    proof_size,
-                    resigned,
-                }
-            }
-            Shred::ShredCode(shred) => {
-                let CodingShredHeader {
-                    num_data_shreds,
-                    num_coding_shreds,
-                    position: _,
-                } = shred.coding_header;
-                shred_variant
-                    == &ShredVariant::MerkleCode {
-                    proof_size,
-                    resigned,
-                }
-                    && num_data_shreds == coding_header.num_data_shreds
-                    && num_coding_shreds == coding_header.num_coding_shreds
-            }
-        }
-    }));
+
     let num_data_shreds = usize::from(coding_header.num_data_shreds);
     let num_coding_shreds = usize::from(coding_header.num_coding_shreds);
     let num_shards = num_data_shreds + num_coding_shreds;
@@ -731,9 +679,9 @@ pub(super) fn recover_custom(
             // The leader signs the Merkle root and shreds in the same erasure
             // batch have the same Merkle root. So the signatures are the same
             // or shreds are not from the same erasure batch.
-            if shred.signature() != &common_header.signature {
-                return Err(Error::InvalidMerkleRootSignatureMismatched);
-            }
+            // if shred.signature() != &common_header.signature {
+            //     return Err(Error::InvalidMerkleRootSignatureMismatched);
+            // }
             let erasure_shard_index = shred.erasure_shard_index()?;
             if !(batch.len()..num_shards).contains(&erasure_shard_index) {
                 return Err(Error::from(InvalidIndex));
@@ -763,64 +711,37 @@ pub(super) fn recover_custom(
         .reconstruct(&mut shards)?;
     // Drop the mut guards to allow further mutation below.
     drop(shards);
-    // Verify and sanitize recovered shreds, re-compute the Merkle tree and set
-    // the merkle proof on the recovered shreds.
-    let nodes = shreds
-        .iter_mut()
-        .zip(&mask)
-        .enumerate()
-        .map(|(index, (shred, mask))| {
-            if !mask {
-                if index < num_data_shreds {
-                    let Shred::ShredData(shred) = shred else {
-                        return Err(Error::InvalidRecoveredShred);
-                    };
-                    let (common_header, data_header) =
-                        deserialize_from_with_limit(&shred.payload[..])?;
-                    if shred.common_header != common_header {
-                        return Err(Error::InvalidRecoveredShred);
-                    }
-                    shred.data_header = data_header;
-                } else if !matches!(shred, Shred::ShredCode(_)) {
+
+    for (index, (shred, mask)) in shreds.iter_mut().zip(&mask).enumerate() {
+        if !mask {
+            if index < num_data_shreds {
+                let Shred::ShredData(shred) = shred else {
+                    return Err(Error::InvalidRecoveredShred);
+                };
+                let (common_header, data_header) =
+                    deserialize_from_with_limit(&shred.payload[..])?;
+                if shred.common_header != common_header {
                     return Err(Error::InvalidRecoveredShred);
                 }
-                shred.sanitize()?;
+                shred.data_header = data_header;
+            } else if !matches!(shred, Shred::ShredCode(_)) {
+                return Err(Error::InvalidRecoveredShred);
             }
-            shred.merkle_node()
-        });
-    let tree = make_merkle_tree(nodes)?;
-    // The attached signature verifies only if we obtain the same Merkle root.
-    // Because shreds obtained from turbine or repair are sig-verified, this
-    // also means that we don't need to verify signatures for recovered shreds.
-    if tree.last() != Some(&merkle_root) {
-        return Err(Error::InvalidMerkleRootTreeMismatched);
-    }
-    let set_merkle_proof = move |(index, (mut shred, mask)): (_, (Shred, _))| {
-        if mask {
-            debug_assert!({
-                let proof = make_merkle_proof(index, num_shards, &tree);
-                shred.merkle_proof()?.map(Some).eq(proof.map(Result::ok))
-            });
-            Ok(None)
-        } else {
-            let proof = make_merkle_proof(index, num_shards, &tree);
-            shred.set_merkle_proof(proof)?;
-            // Already sanitized after reconstruct.
-            debug_assert_matches!(shred.sanitize(), Ok(()));
-            // Assert that shred payload is fully populated.
-            debug_assert_eq!(shred, {
-                let shred = shred.payload().clone();
-                Shred::from_payload(shred).unwrap()
-            });
-            Ok(Some(shred))
+            // shred.sanitize()?;
         }
-    };
+    }
+
     Ok(shreds
         .into_iter()
         .zip(mask)
-        .enumerate()
-        .map(set_merkle_proof)
-        .filter_map(Result::transpose))
+        .filter_map(|(shred, mask)| {
+            if mask {
+                None
+            } else {
+                Some(Ok(shred))
+            }
+        })
+    )
 }
 
 pub(super) fn recover(

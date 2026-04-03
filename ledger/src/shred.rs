@@ -669,7 +669,8 @@ impl TryFrom<u8> for ShredVariant {
 pub fn recover_custom(
     shreds: impl IntoIterator<Item = Shred>,
     reed_solomon_cache: &ReedSolomonCache,
-) -> Result<impl Iterator<Item = Result<Shred, Error>>, Error> {
+    disable_merkle_tree_verification: bool,
+) -> Result<Vec<Result<Shred, Error>>, Error> {
     let shreds = shreds
         .into_iter()
         .map(|shred| {
@@ -687,8 +688,13 @@ pub fn recover_custom(
     // The same signature also verifies for recovered shreds because when
     // reconstructing the Merkle tree for the erasure batch, we will obtain the
     // same Merkle root.
-    let shreds = merkle::recover_custom(shreds, reed_solomon_cache)?;
-    Ok(shreds.map(|shred| shred.map(Shred::from)))
+    if disable_merkle_tree_verification {
+        let shreds = merkle::recover_custom(shreds, reed_solomon_cache)?;
+        Ok(shreds.map(|shred| shred.map(Shred::from)).collect())
+    } else {
+        let shreds = merkle::recover(shreds, reed_solomon_cache)?;
+        Ok(shreds.map(|shred| shred.map(Shred::from)).collect())
+    }
 }
 
 pub fn recover(
