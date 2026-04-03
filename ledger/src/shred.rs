@@ -207,6 +207,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Unknown proof size")]
     UnknownProofSize,
+    #[error("Invalid Merkle Root: Signatures Mismatched")]
+    InvalidMerkleRootSignatureMismatched,
 }
 
 #[repr(u8)]
@@ -660,6 +662,31 @@ impl TryFrom<u8> for ShredVariant {
             }
         }
     }
+}
+
+pub fn recover_custom(
+    shreds: impl IntoIterator<Item = Shred>,
+    reed_solomon_cache: &ReedSolomonCache,
+) -> Result<impl Iterator<Item = Result<Shred, Error>>, Error> {
+    let shreds = shreds
+        .into_iter()
+        .map(|shred| {
+            debug_assert_matches!(
+                shred.common_header().shred_variant,
+                ShredVariant::MerkleCode { .. } | ShredVariant::MerkleData { .. }
+            );
+            merkle::Shred::try_from(shred)
+        })
+        .collect::<Result<_, _>>()?;
+    // With Merkle shreds, leader signs the Merkle root of the erasure batch
+    // and all shreds within the same erasure batch have the same signature.
+    // For recovered shreds, the (unique) signature is copied from shreds which
+    // were received from turbine (or repair) and are already sig-verified.
+    // The same signature also verifies for recovered shreds because when
+    // reconstructing the Merkle tree for the erasure batch, we will obtain the
+    // same Merkle root.
+    let shreds = merkle::recover_custom(shreds, reed_solomon_cache)?;
+    Ok(shreds.map(|shred| shred.map(Shred::from)))
 }
 
 pub fn recover(
