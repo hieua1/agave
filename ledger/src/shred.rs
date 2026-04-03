@@ -209,6 +209,8 @@ pub enum Error {
     UnknownProofSize,
     #[error("Invalid Merkle Root: Signatures Mismatched")]
     InvalidMerkleRootSignatureMismatched,
+    #[error("Invalid Merkle Root: Tree Mismatched")]
+    InvalidMerkleRootTreeMismatched,
 }
 
 #[repr(u8)]

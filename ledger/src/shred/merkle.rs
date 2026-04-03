@@ -793,7 +793,7 @@ pub(super) fn recover_custom(
     // Because shreds obtained from turbine or repair are sig-verified, this
     // also means that we don't need to verify signatures for recovered shreds.
     if tree.last() != Some(&merkle_root) {
-        return Err(Error::InvalidMerkleRoot);
+        return Err(Error::InvalidMerkleRootTreeMismatched);
     }
     let set_merkle_proof = move |(index, (mut shred, mask)): (_, (Shred, _))| {
         if mask {
