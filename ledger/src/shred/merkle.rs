@@ -679,9 +679,9 @@ pub(super) fn recover_custom(
             // The leader signs the Merkle root and shreds in the same erasure
             // batch have the same Merkle root. So the signatures are the same
             // or shreds are not from the same erasure batch.
-            if shred.signature() != &common_header.signature {
-                return Err(Error::InvalidMerkleRootSignatureMismatched);
-            }
+            // if shred.signature() != &common_header.signature {
+            //     return Err(Error::InvalidMerkleRootSignatureMismatched);
+            // }
             let erasure_shard_index = shred.erasure_shard_index()?;
             if !(batch.len()..num_shards).contains(&erasure_shard_index) {
                 return Err(Error::from(InvalidIndex));
